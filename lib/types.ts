@@ -19,4 +19,16 @@ export interface InfluencerCharacter {
   personality_traits: Record<string, any>
   visual_style: Record<string, any>
   bio: string
+  reference_image_url?: string
+  // Physical attributes
+  age?: number
+  height_cm?: number
+  weight_kg?: number
+  ethnicity?: string
+  hair_color?: string
+  eye_color?: string
+  skin_tone?: string
+  body_type?: string
+  created_at?: string
+  updated_at?: string
 }
