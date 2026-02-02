@@ -51,15 +51,26 @@ export default function IdeasPage() {
         },
         body: JSON.stringify({ ideaId })
       })
-
+  
       if (response.ok) {
         setIdeas(ideas.filter(idea => idea.id !== ideaId))
-        // Trigger n8n webhook
-        await fetch(process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL || '', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trigger: 'idea_approved' })
-        })
+        
+        // ✨ Trigger n8n webhook
+        try {
+          await fetch(process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL || '', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              trigger: 'idea_approved',
+              idea_id: ideaId,
+              timestamp: new Date().toISOString()
+            })
+          })
+          console.log('Content generation triggered')
+        } catch (webhookError) {
+          console.error('Webhook trigger failed:', webhookError)
+          // Webhook fail olsa bile devam et
+        }
       }
     } catch (err) {
       console.error('Error approving idea:', err)
