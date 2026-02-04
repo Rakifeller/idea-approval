@@ -15,6 +15,13 @@ export default function IdeasPage() {
   // Filter states
   const [contentTypeFilter, setContentTypeFilter] = useState<string>('all')
   const [sourceTypeFilter, setSourceTypeFilter] = useState<string>('all')
+
+  // Trend modal states
+  const [showTrendModal, setShowTrendModal] = useState(false)
+  const [trendParams, setTrendParams] = useState({
+    niche: 'fashion',
+    country: 'TR'
+  })
   
   const router = useRouter()
 
@@ -65,32 +72,31 @@ export default function IdeasPage() {
   }
 
   const handleGenerateFromTrends = async () => {
-    // Character ID'yi nereden alacağız? Şimdilik ilk character'ı kullanalım
-    // Veya modal açıp seçtirebiliriz
-    
     setGenerating(true)
     try {
-      // Önce character listesini al
-      const charsResponse = await fetch('/api/characters', {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      })
-      const charsData = await charsResponse.json()
-      
-      if (charsData.characters && charsData.characters.length > 0) {
-        const firstChar = charsData.characters[0]
-        
-        // n8n webhook'u tetikle
-        const webhookUrl = process.env.NEXT_PUBLIC_N8N_TIKTOK_WEBHOOK_URL || ''
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            character_id: firstChar.id
-          })
-        })
-        
-        alert('TikTok trend ideas are being generated! Refresh in a few moments.')
+      const nicheMap: Record<string, string> = {
+        'fashion': '1501',
+        'beauty': '1501',
+        'travel': '1502',
+        'food': '1504',
+        'fitness': '1503',
+        'lifestyle': '1501',
+        'tech': '1505'
       }
+
+      const webhookUrl = process.env.NEXT_PUBLIC_N8N_TIKTOK_WEBHOOK_URL || ''
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          niche: trendParams.niche,
+          country: trendParams.country,
+          industry_id: nicheMap[trendParams.niche] || '1501'
+        })
+      })
+      
+      setShowTrendModal(false)
+      alert('TikTok trend ideas are being generated! Refresh in a few moments.')
     } catch (err) {
       console.error('Error generating trends:', err)
       alert('Failed to generate trends')
@@ -185,7 +191,7 @@ export default function IdeasPage() {
               🔄 Refresh
             </button>
             <button
-              onClick={handleGenerateFromTrends}
+              onClick={() => setShowTrendModal(true)}
               disabled={generating}
               className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition-colors disabled:opacity-50"
             >
@@ -239,7 +245,7 @@ export default function IdeasPage() {
           <div className="text-center py-12 bg-white rounded-lg shadow">
             <p className="text-xl text-gray-600">No pending ideas to review 🎉</p>
             <button
-              onClick={handleGenerateFromTrends}
+              onClick={() => setShowTrendModal(true)}
               className="mt-4 bg-pink-600 text-white px-6 py-2 rounded-lg hover:bg-pink-700"
             >
               Generate from TikTok Trends
@@ -254,7 +260,7 @@ export default function IdeasPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">{getContentTypeIcon(idea.content_type)}</span>
                       <span className="bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full">
-                        {(idea as any).influencer_characters?.name || 'Unknown'}
+                        {(idea as any).influencer_characters?.name || 'Unassigned'}
                       </span>
                     </div>
                     <span className="text-xs text-gray-500">
@@ -303,6 +309,67 @@ export default function IdeasPage() {
           </div>
         )}
       </div>
+
+      {/* Trend Generation Modal */}
+      {showTrendModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Generate Ideas from Trends</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Niche</label>
+                <select
+                  value={trendParams.niche}
+                  onChange={(e) => setTrendParams({ ...trendParams, niche: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
+                >
+                  <option value="fashion">Fashion</option>
+                  <option value="beauty">Beauty</option>
+                  <option value="travel">Travel</option>
+                  <option value="food">Food</option>
+                  <option value="fitness">Fitness</option>
+                  <option value="lifestyle">Lifestyle</option>
+                  <option value="tech">Tech</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
+                <select
+                  value={trendParams.country}
+                  onChange={(e) => setTrendParams({ ...trendParams, country: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
+                >
+                  <option value="TR">🇹🇷 Turkey</option>
+                  <option value="US">🇺🇸 United States</option>
+                  <option value="GB">🇬🇧 United Kingdom</option>
+                  <option value="DE">🇩🇪 Germany</option>
+                  <option value="FR">🇫🇷 France</option>
+                  <option value="IT">🇮🇹 Italy</option>
+                  <option value="ES">🇪🇸 Spain</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowTrendModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateFromTrends}
+                disabled={generating}
+                className="flex-1 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50"
+              >
+                Generate Ideas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   )
 }

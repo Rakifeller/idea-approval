@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ characters })
+    return NextResponse.json({ characters: characters || [] })
   } catch (error) {
     console.error('API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -33,21 +33,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, niche, bio, reference_image_url } = body
 
     const { data: character, error } = await supabase
       .from('influencer_characters')
-      .insert([{
-        name,
-        niche,
-        bio,
-        reference_image_url: reference_image_url || null
-      }])
+      .insert([body])
       .select()
       .single()
 
     if (error) {
-      console.error('Supabase insert error:', error)
+      console.error('Supabase error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
