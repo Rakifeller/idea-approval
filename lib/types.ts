@@ -1,12 +1,14 @@
 export interface ContentIdea {
   id: string
   character_id: string
-  source_id: string
-  source_post_url: string
+  source_id?: string
+  source_post_url?: string
   idea_text: string
   inspiration_summary: string
-  original_post_caption: string
+  original_post_caption?: string
   status: 'pending' | 'approved' | 'rejected'
+  source_type: 'rss' | 'tiktok_trend' | 'manual'
+  content_type: 'photo' | 'video'  // ← YENİ
   created_at: string
   approved_at?: string
   rejected_at?: string
