@@ -15,10 +15,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'character_id required' }, { status: 400 })
     }
 
-    const { data: content, error } = await supabase
-      .from('approved_content')
-      .select('id, image_url, caption, status, created_at, idea_id')
+    const { data: ideas, error } = await supabase
+      .from('content_ideas')
+      .select('*')
       .eq('character_id', characterId)
+      .eq('status', 'pending')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -26,23 +27,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Get content_type from related idea
-    const contentWithType = await Promise.all(
-      (content || []).map(async (item) => {
-        const { data: idea } = await supabase
-          .from('content_ideas')
-          .select('content_type')
-          .eq('id', item.idea_id)
-          .single()
-        
-        return {
-          ...item,
-          content_type: idea?.content_type || 'photo'
-        }
-      })
-    )
-
-    return NextResponse.json({ content: contentWithType })
+    return NextResponse.json({ ideas: ideas || [] })
   } catch (error) {
     console.error('API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

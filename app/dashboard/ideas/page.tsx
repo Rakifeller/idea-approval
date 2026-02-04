@@ -11,6 +11,8 @@ export default function IdeasPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [authToken, setAuthToken] = useState<string>('')
+
+  const [characters, setCharacters] = useState<any[]>([])
   
   // Filter states
   const [contentTypeFilter, setContentTypeFilter] = useState<string>('all')
@@ -33,6 +35,7 @@ export default function IdeasPage() {
     }
     setAuthToken(token)
     fetchIdeas(token)
+    fetchCharacters(token)
   }, [router])
 
   useEffect(() => {
@@ -49,6 +52,18 @@ export default function IdeasPage() {
 
     setFilteredIdeas(filtered)
   }, [ideas, contentTypeFilter, sourceTypeFilter])
+
+  const fetchCharacters = async (token: string) => {
+    try {
+      const response = await fetch('/api/characters', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await response.json()
+      setCharacters(data.characters || [])
+    } catch (err) {
+      console.error('Failed to fetch characters:', err)
+    }
+  }
 
   const fetchIdeas = async (token: string) => {
     setLoading(true)
@@ -69,6 +84,35 @@ export default function IdeasPage() {
       console.error('Failed to fetch ideas:', err)
     }
     setLoading(false)
+  }
+
+  const handleAssignInfluencer = async (ideaId: string, characterId: string) => {
+    try {
+      const response = await fetch('/api/assign-influencer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ ideaId, characterId })
+      })
+  
+      if (response.ok) {
+        // Update local state
+        setIdeas(ideas.map(idea => 
+          idea.id === ideaId 
+            ? { ...idea, character_id: characterId }
+            : idea
+        ))
+        setFilteredIdeas(filteredIdeas.map(idea => 
+          idea.id === ideaId 
+            ? { ...idea, character_id: characterId }
+            : idea
+        ))
+      }
+    } catch (err) {
+      console.error('Error assigning influencer:', err)
+    }
   }
 
   const handleGenerateFromTrends = async () => {
@@ -260,7 +304,9 @@ export default function IdeasPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">{getContentTypeIcon(idea.content_type)}</span>
                       <span className="bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full">
-                        {(idea as any).influencer_characters?.name || 'Unassigned'}
+  {idea.character_id 
+    ? characters.find(c => c.id === idea.character_id)?.name || 'Assigned'
+    : '⚠️ Not Assigned'}
                       </span>
                     </div>
                     <span className="text-xs text-gray-500">
@@ -289,7 +335,23 @@ export default function IdeasPage() {
                     </a>
                   )}
                 </div>
-                
+                <div className="mb-3">
+  <label className="block text-xs font-medium text-gray-500 mb-1">
+    Assign to Influencer:
+  </label>
+  <select
+    value={idea.character_id || ''}
+    onChange={(e) => handleAssignInfluencer(idea.id, e.target.value)}
+    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-purple-500"
+  >
+    <option value="">Select Influencer...</option>
+    {characters.map((char) => (
+      <option key={char.id} value={char.id}>
+        {char.name} ({char.niche})
+      </option>
+    ))}
+  </select>
+</div>
                 <div className="mt-auto pt-4 flex gap-3">
                   <button
                     onClick={() => handleApprove(idea.id)}
