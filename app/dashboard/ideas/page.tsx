@@ -11,6 +11,7 @@ export default function IdeasPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [authToken, setAuthToken] = useState<string>('')
+  const [approvingId, setApprovingId] = useState<string | null>(null) // Track which idea is being approved
 
   const [characters, setCharacters] = useState<any[]>([])
   
@@ -148,33 +149,45 @@ export default function IdeasPage() {
     setGenerating(false)
   }
 
-  const handleApprove = async (ideaId: string) => {
+  const handleApprove = async (idea: ContentIdea) => {
     try {
+      setApprovingId(idea.id)
+      
+      // 1. Approve in Supabase
       const response = await fetch('/api/approve-idea', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({ ideaId })
+        body: JSON.stringify({ ideaId: idea.id })
       })
 
       if (response.ok) {
-        setIdeas(ideas.filter(idea => idea.id !== ideaId))
-        
-        // Trigger content generation webhook
-        await fetch(process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL || '', {
+        // 2. Trigger appropriate webhook based on content_type
+        const webhookUrl = idea.content_type === 'video' 
+          ? process.env.NEXT_PUBLIC_VIDEO_WEBHOOK_URL 
+          : process.env.NEXT_PUBLIC_PHOTO_WEBHOOK_URL
+
+        await fetch(webhookUrl || '', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             trigger: 'idea_approved',
-            idea_id: ideaId,
+            idea_id: idea.id,
+            content_type: idea.content_type,
             timestamp: new Date().toISOString()
           })
         })
+
+        // 3. Update local state
+        setIdeas(ideas.filter(i => i.id !== idea.id))
+        setFilteredIdeas(filteredIdeas.filter(i => i.id !== idea.id))
       }
     } catch (err) {
       console.error('Error approving idea:', err)
+    } finally {
+      setApprovingId(null)
     }
   }
 
@@ -191,6 +204,7 @@ export default function IdeasPage() {
 
       if (response.ok) {
         setIdeas(ideas.filter(idea => idea.id !== ideaId))
+        setFilteredIdeas(filteredIdeas.filter(idea => idea.id !== ideaId))
       }
     } catch (err) {
       console.error('Error rejecting idea:', err)
@@ -204,6 +218,12 @@ export default function IdeasPage() {
 
   const getContentTypeIcon = (type: string) => {
     return type === 'video' ? '🎥' : '📸'
+  }
+
+  const getContentTypeBadge = (type: string) => {
+    return type === 'video' 
+      ? <span className="bg-purple-100 text-purple-700 text-xs font-semibold px-2 py-1 rounded">🎥 Video</span>
+      : <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded">📸 Photo</span>
   }
 
   const getSourceTypeBadge = (type: string) => {
@@ -304,9 +324,9 @@ export default function IdeasPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">{getContentTypeIcon(idea.content_type)}</span>
                       <span className="bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full">
-  {idea.character_id 
-    ? characters.find(c => c.id === idea.character_id)?.name || 'Assigned'
-    : '⚠️ Not Assigned'}
+                        {idea.character_id 
+                          ? characters.find(c => c.id === idea.character_id)?.name || 'Assigned'
+                          : '⚠️ Not Assigned'}
                       </span>
                     </div>
                     <span className="text-xs text-gray-500">
@@ -314,7 +334,8 @@ export default function IdeasPage() {
                     </span>
                   </div>
 
-                  <div className="mb-3">
+                  <div className="mb-3 flex gap-2">
+                    {getContentTypeBadge(idea.content_type)}
                     {getSourceTypeBadge(idea.source_type)}
                   </div>
                   
@@ -336,32 +357,34 @@ export default function IdeasPage() {
                   )}
                 </div>
                 <div className="mb-3">
-  <label className="block text-xs font-medium text-gray-500 mb-1">
-    Assign to Influencer:
-  </label>
-  <select
-    value={idea.character_id || ''}
-    onChange={(e) => handleAssignInfluencer(idea.id, e.target.value)}
-    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-purple-500"
-  >
-    <option value="">Select Influencer...</option>
-    {characters.map((char) => (
-      <option key={char.id} value={char.id}>
-        {char.name} ({char.niche})
-      </option>
-    ))}
-  </select>
-</div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Assign to Influencer:
+                  </label>
+                  <select
+                    value={idea.character_id || ''}
+                    onChange={(e) => handleAssignInfluencer(idea.id, e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">Select Influencer...</option>
+                    {characters.map((char) => (
+                      <option key={char.id} value={char.id}>
+                        {char.name} ({char.niche})
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="mt-auto pt-4 flex gap-3">
                   <button
-                    onClick={() => handleApprove(idea.id)}
-                    className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors font-medium"
+                    onClick={() => handleApprove(idea)}
+                    disabled={approvingId === idea.id}
+                    className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    ✓ Approve
+                    {approvingId === idea.id ? '⏳ Processing...' : '✓ Approve'}
                   </button>
                   <button
                     onClick={() => handleReject(idea.id)}
-                    className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors font-medium"
+                    disabled={approvingId === idea.id}
+                    className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors font-medium disabled:opacity-50"
                   >
                     ✗ Reject
                   </button>
