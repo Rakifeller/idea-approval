@@ -1,5 +1,4 @@
 // app/api/schedule-post/route.ts
-
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -26,7 +25,8 @@ export async function POST(request: NextRequest) {
       caption,
       hashtags,
       media_url,
-      media_type
+      media_type,
+      post_now
     } = body
 
     // Validate required fields
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Insert scheduled post
+    // Insert scheduled post — if post_now, set status to 'posting'
     const { data, error } = await supabase
       .from('scheduled_posts')
       .insert({
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         hashtags,
         media_url,
         media_type,
-        status: 'scheduled'
+        status: post_now ? 'posting' : 'scheduled'
       })
       .select()
       .single()
@@ -59,11 +59,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      scheduled_post: data 
-    })
+    // If post_now, trigger n8n webhook for immediate posting
+    if (post_now && data) {
+      const webhookUrl = process.env.N8N_POST_NOW_WEBHOOK_URL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL
+      
+      if (webhookUrl) {
+        try {
+          await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              trigger: 'post_now',
+              scheduled_post_id: data.id,
+              content_id,
+              character_id,
+              post_type,
+              caption,
+              hashtags,
+              media_url,
+              media_type,
+              timestamp: new Date().toISOString()
+            })
+          })
+        } catch (webhookError) {
+          console.error('Webhook trigger failed:', webhookError)
+          // Don't fail the request — post is saved, webhook can be retried
+        }
+      } else {
+        console.warn('No webhook URL configured for post_now')
+      }
+    }
 
+    return NextResponse.json({
+      success: true,
+      scheduled_post: data,
+      posted_immediately: !!post_now
+    })
   } catch (error: any) {
     console.error('Schedule post error:', error)
     return NextResponse.json(
@@ -97,7 +128,6 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ scheduled_posts: data || [] })
-
   } catch (error: any) {
     console.error('Get scheduled posts error:', error)
     return NextResponse.json(
