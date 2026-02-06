@@ -304,14 +304,17 @@ export default function ContentPage() {
     setIsPublishing(true)
 
     try {
+      const mediaUrl = selectedContent.video_url || selectedContent.image_url || ''
+      const isVideo = mediaUrl.endsWith('.mp4') || selectedContent.content_type === 'video'
+
       const payload: any = {
         content_id: selectedContent.id,
         character_id: selectedContent.character_id,
         post_type: publishForm.post_type,
         caption: publishForm.caption,
         hashtags: selectedContent.hashtags,
-        media_url: selectedContent.video_url || selectedContent.image_url,
-        media_type: selectedContent.content_type
+        media_url: mediaUrl,
+        media_type: isVideo ? 'video' : 'photo'
       }
 
       if (publishMode === 'schedule') {

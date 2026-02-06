@@ -30,26 +30,37 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Validate required fields
-    if (!content_id || !character_id || !post_type || !scheduled_time || !media_url) {
+    if (!content_id || !character_id || !post_type || !media_url) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       )
     }
 
-    // Insert scheduled post — if post_now, set status to 'posting'
+    // post_now → scheduled_time = now, so the cron job picks it up immediately
+    const finalScheduledTime = post_now
+      ? new Date().toISOString()
+      : scheduled_time
+
+    if (!finalScheduledTime) {
+      return NextResponse.json(
+        { error: 'scheduled_time is required for scheduling' },
+        { status: 400 }
+      )
+    }
+
     const { data, error } = await supabase
       .from('scheduled_posts')
       .insert({
         content_id,
         character_id,
         post_type,
-        scheduled_time,
+        scheduled_time: finalScheduledTime,
         caption,
         hashtags,
         media_url,
         media_type,
-        status: post_now ? 'posting' : 'scheduled'
+        status: 'scheduled'
       })
       .select()
       .single()
@@ -57,37 +68,6 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Supabase error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    // If post_now, trigger n8n webhook for immediate posting
-    if (post_now && data) {
-      const webhookUrl = process.env.N8N_POST_NOW_WEBHOOK_URL || process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL
-      
-      if (webhookUrl) {
-        try {
-          await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              trigger: 'post_now',
-              scheduled_post_id: data.id,
-              content_id,
-              character_id,
-              post_type,
-              caption,
-              hashtags,
-              media_url,
-              media_type,
-              timestamp: new Date().toISOString()
-            })
-          })
-        } catch (webhookError) {
-          console.error('Webhook trigger failed:', webhookError)
-          // Don't fail the request — post is saved, webhook can be retried
-        }
-      } else {
-        console.warn('No webhook URL configured for post_now')
-      }
     }
 
     return NextResponse.json({
@@ -113,7 +93,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get all scheduled posts with character info
     const { data, error } = await supabase
       .from('scheduled_posts')
       .select(`
