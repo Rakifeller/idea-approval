@@ -314,7 +314,7 @@ export default function ContentPage() {
         caption: publishForm.caption,
         hashtags: selectedContent.hashtags,
         media_url: mediaUrl,
-        media_type: isVideo ? 'video' : 'photo'
+        media_type: isVideo ? 'video' : 'image'
       }
 
       if (publishMode === 'schedule') {
